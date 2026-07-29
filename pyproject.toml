@@ -1,6 +1,6 @@
 [project]
 name = "wg-httpx"
-version = "0.1.0"
+version = "0.1.1"
 description = "Route individual HTTPX clients through a userspace WireGuard tunnel"
 readme = "README.md"
 authors = [
@@ -48,6 +48,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wg_httpx"]
+artifacts = ["src/wg_httpx/_bin/**"]
 
 [tool.hatch.build.hooks.custom]
 path = "hatch_build.py"
