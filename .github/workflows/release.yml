@@ -1,0 +1,142 @@
+name: Build and release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x86-64
+            runner: windows-2025
+            artifact: windows-amd64
+          - name: Windows ARM64
+            runner: windows-11-arm
+            artifact: windows-arm64
+          - name: Linux x86-64
+            runner: ubuntu-24.04
+            artifact: linux-amd64
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+            artifact: linux-arm64
+          - name: macOS Intel
+            runner: macos-15-intel
+            artifact: macos-amd64
+          - name: macOS Apple Silicon
+            runner: macos-15
+            artifact: macos-arm64
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.x"
+          cache: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.10.2"
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --dev
+
+      - name: Run tests
+        run: uv run --frozen pytest
+
+      - name: Build bundled wireproxy
+        run: uv run --frozen python scripts/build_wireproxy.py
+
+      - name: Verify wireproxy version
+        run: uv run --frozen python scripts/verify_wireproxy.py
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ matrix.artifact }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Download wheels
+        uses: actions/download-artifact@v8
+        with:
+          pattern: wheel-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Verify tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import tomllib
+
+          package = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          expected = package["project"]["version"]
+          actual = os.environ["RELEASE_TAG"].removeprefix("v")
+          if actual != expected:
+              raise SystemExit(f"tag {actual!r} does not match package version {expected!r}")
+          PY
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/*.whl --verify-tag --generate-notes
+
+  pypi:
+    name: Publish to PyPI
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - build
+      - release
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/wg-httpx
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download wheels
+        uses: actions/download-artifact@v8
+        with:
+          pattern: wheel-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish wheels with OIDC
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: artifacts/
