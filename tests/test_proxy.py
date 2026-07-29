@@ -42,6 +42,7 @@ class FakeProcess:
 def install_fake_process(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]:
     binary = tmp_path / "wireproxy.exe"
     binary.touch()
+    binary.chmod(0o755)
     captured: dict[str, Any] = {}
 
     def spawn(proxy: WireGuardProxy, _binary: Path, config: Path) -> None:
@@ -91,6 +92,7 @@ def test_raw_config_is_supported(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 def test_missing_config_is_rejected(tmp_path: Path) -> None:
     binary = tmp_path / "wireproxy.exe"
     binary.touch()
+    binary.chmod(0o755)
     proxy = WireGuardProxy(tmp_path / "missing.conf", binary=binary)
 
     with pytest.raises(ConfigError, match="does not exist"):

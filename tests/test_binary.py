@@ -11,6 +11,7 @@ from wg_httpx._exceptions import BinaryNotFoundError
 def test_explicit_binary_is_resolved(tmp_path: Path) -> None:
     binary = tmp_path / "wireproxy.exe"
     binary.touch()
+    binary.chmod(0o755)
 
     assert resolve_wireproxy(binary) == binary.resolve()
 
