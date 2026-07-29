@@ -10,10 +10,28 @@ from pathlib import Path
 from ._exceptions import BinaryNotFoundError
 
 _ENV_NAME = "WG_HTTPX_WIREPROXY"
+_BUILD_PLATFORM_ENV = "WG_HTTPX_BUILD_PLATFORM"
 
 
 def platform_tag() -> str:
     """Return the package binary directory tag for this interpreter."""
+    configured = os.environ.get(_BUILD_PLATFORM_ENV)
+    supported = {
+        "windows-amd64",
+        "windows-arm64",
+        "linux-amd64",
+        "linux-arm64",
+        "macos-amd64",
+        "macos-arm64",
+    }
+    if configured:
+        if configured not in supported:
+            raise BinaryNotFoundError(
+                f"Unsupported {_BUILD_PLATFORM_ENV}: {configured}. "
+                f"Set {_ENV_NAME} to a compatible wireproxy executable."
+            )
+        return configured
+
     systems = {
         "windows": "windows",
         "linux": "linux",

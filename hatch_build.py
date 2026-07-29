@@ -2,32 +2,40 @@
 
 from __future__ import annotations
 
+import os
 import platform
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
+BUILD_PLATFORM_ENV = "WG_HTTPX_BUILD_PLATFORM"
+
 
 def wheel_platform_tag() -> str:
     """Map the Go binary platform to a Python wheel platform tag."""
-    system = platform.system().lower()
-    machine = platform.machine().lower()
     tags = {
-        ("windows", "amd64"): "win_amd64",
-        ("windows", "x86_64"): "win_amd64",
-        ("windows", "arm64"): "win_arm64",
-        ("linux", "amd64"): "linux_x86_64",
-        ("linux", "x86_64"): "linux_x86_64",
-        ("linux", "arm64"): "linux_aarch64",
-        ("linux", "aarch64"): "linux_aarch64",
-        ("darwin", "amd64"): "macosx_11_0_x86_64",
-        ("darwin", "x86_64"): "macosx_11_0_x86_64",
-        ("darwin", "arm64"): "macosx_11_0_arm64",
-        ("darwin", "aarch64"): "macosx_11_0_arm64",
+        "windows-amd64": "win_amd64",
+        "windows-arm64": "win_arm64",
+        "linux-amd64": "manylinux_2_17_x86_64",
+        "linux-arm64": "manylinux_2_17_aarch64",
+        "macos-amd64": "macosx_11_0_x86_64",
+        "macos-arm64": "macosx_11_0_arm64",
     }
+    target = os.environ.get(BUILD_PLATFORM_ENV)
+    if target is None:
+        systems = {"windows": "windows", "linux": "linux", "darwin": "macos"}
+        machines = {
+            "amd64": "amd64",
+            "x86_64": "amd64",
+            "arm64": "arm64",
+            "aarch64": "arm64",
+        }
+        system = systems.get(platform.system().lower())
+        machine = machines.get(platform.machine().lower())
+        target = f"{system}-{machine}" if system and machine else ""
     try:
-        return tags[(system, machine)]
+        return tags[target]
     except KeyError as error:
-        raise RuntimeError(f"Unsupported wheel platform: {system} {machine}") from error
+        raise RuntimeError(f"Unsupported wheel platform: {target or 'unknown'}") from error
 
 
 class CustomBuildHook(BuildHookInterface):

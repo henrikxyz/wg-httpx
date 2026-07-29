@@ -13,6 +13,8 @@ jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
+    env:
+      WG_HTTPX_BUILD_PLATFORM: ${{ matrix.artifact }}
     strategy:
       fail-fast: false
       matrix:
@@ -113,7 +115,13 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/*.whl --verify-tag --generate-notes
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" artifacts/*.whl --clobber
+            gh release edit "$GITHUB_REF_NAME" --target "$GITHUB_SHA"
+          else
+            gh release create "$GITHUB_REF_NAME" artifacts/*.whl --verify-tag --generate-notes
+          fi
 
   pypi:
     name: Publish to PyPI
